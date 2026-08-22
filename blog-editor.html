@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <title>写博客｜Yu Li</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="nav-wrap">
+      <nav class="nav" aria-label="主导航">
+        <a class="brand" href="index.html" aria-label="返回首页"><span>YL</span><i></i></a>
+        <button class="menu-toggle" aria-expanded="false" aria-controls="nav-links">菜单</button>
+        <div class="nav-links" id="nav-links">
+          <a href="index.html#about">关于我</a><a href="index.html#projects">项目</a><a href="index.html#skills">能力</a><a href="index.html#notes">博客</a><a class="write-link active" href="blog-editor.html">＋ 写博客</a>
+          <a class="nav-cta" href="index.html">返回首页 ↗</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="editor-page">
+      <section class="editor-shell">
+        <div class="editor-head">
+          <div><p class="eyebrow">BLOG EDITOR / 写博客</p><h1>记录一次<br /><em>有价值的思考。</em></h1></div>
+          <p class="draft-status" id="draft-status" role="status">草稿会自动保存在当前浏览器</p>
+        </div>
+        <form class="blog-form" id="blog-form">
+          <label><span>文章标题</span><input id="post-title" type="text" placeholder="输入一个清晰的标题" autocomplete="off" /></label>
+          <div class="editor-meta">
+            <label><span>分类</span><input id="post-category" type="text" placeholder="例如：AI 测试" autocomplete="off" /></label>
+            <label><span>日期</span><input id="post-date" type="date" /></label>
+          </div>
+          <label><span>正文（Markdown）</span><textarea id="post-content" rows="18" placeholder="从这里开始写作……&#10;&#10;## 小标题&#10;&#10;正文内容"></textarea></label>
+          <div class="editor-actions">
+            <button class="button primary publish-button" type="button" id="publish-post">保存并发布 <span>↗</span></button>
+            <button class="button primary" type="button" id="export-post">导出 Markdown <span>↓</span></button>
+            <button class="button secondary" type="button" id="clear-draft">清空草稿</button>
+          </div>
+        </form>
+      </section>
+    </main>
+    <script src="script.js"></script>
+    <script src="blog-editor.js"></script>
+  </body>
+</html>

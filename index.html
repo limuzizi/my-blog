@@ -18,7 +18,7 @@
         <a class="brand" href="#top" aria-label="返回顶部"><span>YL</span><i></i></a>
         <button class="menu-toggle" aria-expanded="false" aria-controls="nav-links">菜单</button>
         <div class="nav-links" id="nav-links">
-          <a href="#about">关于我</a><a href="#projects">项目</a><a href="#skills">能力</a><a href="#notes">学习记录</a>
+          <a href="#about">关于我</a><a href="#projects">项目</a><a href="#skills">能力</a><a href="#notes">博客</a><a class="write-link" href="blog-editor.html">＋ 写博客</a>
           <a class="nav-cta" href="mailto:your-email@example.com">联系我 ↗</a>
         </div>
       </nav>
@@ -91,7 +91,7 @@
       <section class="notes section" id="notes">
         <div class="section-label reveal"><span>04</span><p>LEARNING LOG / 学习记录</p></div>
         <div class="notes-head reveal"><h2>公开学习，持续复盘。</h2><p>把知识留下，也让成长被看见。</p></div>
-        <div class="note-grid">
+        <div class="note-grid" id="blog-list">
           <a class="note-card reveal" href="#"><time>2026.08</time><span class="note-type">AI 测试</span><h3>LiteLLM 与 LangChain：统一模型调用时，该怎么选？</h3><span class="arrow">↗</span></a>
           <a class="note-card reveal" href="#"><time>2026.08</time><span class="note-type">测试基础</span><h3>E2E 自动化测试到底在验证什么？</h3><span class="arrow">↗</span></a>
           <a class="note-card reveal" href="#"><time>2026.07</time><span class="note-type">本地模型</span><h3>Ollama、模型权重与 Runtime 的关系</h3><span class="arrow">↗</span></a>
@@ -106,5 +106,6 @@
 
     <footer><span>© 2026 YU LI</span><span>AI TEST ENGINEER PORTFOLIO</span><a href="#top">BACK TO TOP ↑</a></footer>
     <script src="script.js"></script>
+    <script src="blog-list.js"></script>
   </body>
 </html>
