@@ -17,7 +17,7 @@
         <a class="brand" href="index.html" aria-label="返回首页"><span>YL</span><i></i></a>
         <button class="menu-toggle" aria-expanded="false" aria-controls="nav-links">菜单</button>
         <div class="nav-links" id="nav-links">
-          <a href="index.html#about">关于我</a><a href="index.html#projects">项目</a><a href="index.html#skills">能力</a><a href="index.html#notes">博客</a><a class="write-link active" href="blog-editor.html">＋ 写博客</a>
+          <a href="index.html#about">关于我</a><a href="index.html#projects">项目</a><a href="index.html#skills">能力</a><a id="blog-nav-link" href="index.html#notes">博客</a><div class="blog-subnav" id="blog-subnav" aria-label="博客文章目录"><a href="blogs/pages/解耦多模型调用-litellm-gateway-架构设计与腾讯云部署.html">解耦多模型调用：LiteLLM Gateway 架构设计与腾讯云部署</a></div><a class="write-link active" data-editor-access href="blog-editor.html" hidden>＋ 写博客</a>
           <a class="nav-cta" href="index.html">返回首页 ↗</a>
         </div>
       </nav>
@@ -41,10 +41,14 @@
             <button class="button primary" type="button" id="export-post">导出 Markdown <span>↓</span></button>
             <button class="button secondary" type="button" id="clear-draft">清空草稿</button>
           </div>
+          <p class="publish-help">发布文章需要通过 <code>python3 server.py</code> 启动项目，不能直接双击 HTML 文件。</p>
         </form>
       </section>
     </main>
     <script src="script.js"></script>
-    <script src="blog-editor.js"></script>
+    <script src="editor-access.js"></script>
+    <script src="blogs/posts-data.js?v=20260822"></script>
+    <script src="blog-list.js?v=20260822"></script>
+    <script src="blog-editor.js?v=20260822-2"></script>
   </body>
 </html>

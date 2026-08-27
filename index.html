@@ -18,7 +18,7 @@
         <a class="brand" href="#top" aria-label="返回顶部"><span>YL</span><i></i></a>
         <button class="menu-toggle" aria-expanded="false" aria-controls="nav-links">菜单</button>
         <div class="nav-links" id="nav-links">
-          <a href="#about">关于我</a><a href="#projects">项目</a><a href="#skills">能力</a><a href="#notes">博客</a><a class="write-link" href="blog-editor.html">＋ 写博客</a>
+          <a href="#about">关于我</a><a href="#projects">项目</a><a href="#skills">能力</a><a id="blog-nav-link" href="#notes">博客</a><div class="blog-subnav" id="blog-subnav" aria-label="博客文章目录"><a href="blogs/pages/解耦多模型调用-litellm-gateway-架构设计与腾讯云部署.html">解耦多模型调用：LiteLLM Gateway 架构设计与腾讯云部署</a></div><a class="write-link" data-editor-access href="blog-editor.html" hidden>＋ 写博客</a>
           <a class="nav-cta" href="mailto:your-email@example.com">联系我 ↗</a>
         </div>
       </nav>
@@ -106,6 +106,8 @@
 
     <footer><span>© 2026 YU LI</span><span>AI TEST ENGINEER PORTFOLIO</span><a href="#top">BACK TO TOP ↑</a></footer>
     <script src="script.js"></script>
-    <script src="blog-list.js"></script>
+    <script src="editor-access.js"></script>
+    <script src="blogs/posts-data.js?v=20260822"></script>
+    <script src="blog-list.js?v=20260822"></script>
   </body>
 </html>

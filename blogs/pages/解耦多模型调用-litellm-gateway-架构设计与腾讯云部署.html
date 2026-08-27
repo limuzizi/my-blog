@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>解耦多模型调用：LiteLLM Gateway 架构设计与腾讯云部署｜Yu Li</title><link rel="stylesheet" href="../../styles.css" /></head>
+<body class="post-page"><main class="post-shell">
+<div class="post-toolbar"><a class="post-back" href="../../index.html#notes">← 返回博客</a><a class="post-edit" data-editor-access href="../../blog-editor.html?edit=解耦多模型调用-litellm-gateway-架构设计与腾讯云部署" hidden>编辑文章 ↗</a></div>
+<article><h1>解耦多模型调用：LiteLLM Gateway 架构设计与腾讯云部署</h1><div class="post-content"><h2>一、背景：为什么搭建LLM Gateway</h2>
+<p>随着 AI 应用逐渐从单模型调用走向多模型协作，一个很现实的工程问题随之出现：</p>
+<p>不同模型厂商拥有不同的 API 地址、模型名称、鉴权方式和 SDK。</p>
+<p>例如一个 AI 应用同时需要使用：</p>
+<pre><code>OpenAI
+DeepSeek
+Qwen</code></pre>
+<p>如果业务代码直接与每个模型厂商耦合，就会逐渐形成：</p>
+<pre><code>应用
+ ├── OpenAI API
+ ├── DeepSeek API
+ └── DashScope API</code></pre>
+<p>随着模型数量增加，会产生下述问题：</p>
+<p><strong>模型切换成本增加</strong><br /><strong>API Key 分散在不同应用中</strong><br /><strong>Provider 与业务代码耦合</strong><br /><strong>调用方式难以统一</strong><br /><strong>后续难以进行统一的限流、成本统计和故障切换。</strong></p>
+<p>因此我开始思考：</p>
+<blockquote><strong>能不能在业务应用与模型 Provider 之间增加一个统一的模型访问层？</strong></blockquote>
+<p>让上层应用不再关心底层究竟调用 OpenAI、DeepSeek 还是 Qwen。</p>
+<p>基于这个目标，我设计了：</p>
+<pre><code>                         ┌── OpenAI
+                         │
+Application → LLM Gateway ├── DeepSeek
+                         │
+                         └── Qwen</code></pre>
+<p>在对统一模型调用方案进行分析后，我选择使用 <strong>LiteLLM Gateway</strong> 实现这一层。</p>
+<p>因此这个项目的目标非常明确：</p>
+<blockquote><strong>在自己的云服务器上独立搭建一个统一 LLM Gateway，将 OpenAI、DeepSeek、Qwen 等不同模型接入同一个 API，并完成鉴权、模型路由、密钥隔离和公网调用。</strong></blockquote>
+<h2>二、架构设计</h2>
+<p>最终设计的整体架构：</p>
+<pre><code>Mac / AI Application / Test Program
+                 │
+                 │ HTTP Request
+                 ▼
+        Tencent Cloud Server
+                 │
+                 ▼
+              Docker
+                 │
+                 ▼
+          LiteLLM Gateway
+                 │
+        ┌────────┼────────┐
+        ▼        ▼        ▼
+     OpenAI   DeepSeek   Qwen
+                         │
+                     DashScope</code></pre>
+<p>这里我刻意把 <strong>LiteLLM 放在应用和模型 Provider 中间</strong>。</p>
+<p>这样上层应用只需要知道：</p>
+<pre><code>LiteLLM Base URL
+LiteLLM Master Key
+Model Alias</code></pre>
+<p>而不需要知道真正的：</p>
+<pre><code>OPENAI_API_KEY
+DEEPSEEK_API_KEY
+DASHSCOPE_API_KEY</code></pre>
+<p>这实际上完成了一层非常重要的<strong>模型访问抽象</strong>。</p>
+<h2>三、服务器环境准备</h2>
+<p>本次部署环境：</p>
+<pre><code>Cloud：Tencent Cloud
+OS：Ubuntu 24.04 LTS
+CPU：2 Core
+Memory：2 GB
+Disk：40 GB</code></pre>
+<p>首先更新 Ubuntu 软件索引：</p>
+<pre><code>apt update</code></pre>
+<p>安装 Docker：</p>
+<pre><code>apt install -y docker.io</code></pre>
+<p>检查版本：</p>
+<pre><code>docker --version</code></pre>
+<p>服务器最终安装：</p>
+<pre><code>Docker version 29.1.3</code></pre>
+<p>确认 Docker 服务：</p>
+<pre><code>docker ps</code></pre>
+<p>环境准备完成。</p>
+<h2>四、设计 LiteLLM 模型路由</h2>
+<p>整个项目中，我认为比较重要的设计之一，是<strong>没有让客户端直接使用各 Provider 的真实模型名称</strong>。</p>
+<p>我在 <code>config.yaml</code> 中建立了一层自己的模型别名：</p>
+<pre><code>model_list:
+  - model_name: gpt
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: deepseek
+    litellm_params:
+      model: deepseek/deepseek-v4-flash
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  - model_name: qwen
+    litellm_params:
+      model: dashscope/qwen3.7-flash-2026-07-15
+      api_key: os.environ/DASHSCOPE_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY</code></pre>
+<p>这样客户端只需要请求：</p>
+<pre><code>{
+  &quot;model&quot;: &quot;deepseek&quot;
+}</code></pre>
+<p>LiteLLM 会完成：</p>
+<pre><code>deepseek
+   ↓
+LiteLLM Model Alias
+   ↓
+config.yaml
+   ↓
+deepseek/deepseek-v4-flash
+   ↓
+DeepSeek Provider</code></pre>
+<p>同样：</p>
+<pre><code>qwen
+ ↓
+dashscope/qwen3.7-flash-2026-07-15</code></pre>
+<p>这意味着以后即使底层模型发生变化，例如：</p>
+<pre><code>DeepSeek Model A
+       ↓
+DeepSeek Model B</code></pre>
+<p>理论上客户端仍然可以继续使用：</p>
+<pre><code>&quot;model&quot;: &quot;deepseek&quot;</code></pre>
+<p>只需要修改 Gateway 层的配置。</p>
+<p>这样可以进一步降低业务代码和模型 Provider 之间的耦合。</p>
+<h2>五、API Key 与业务调用隔离</h2>
+<p>另一个我重点考虑的问题是：</p>
+<blockquote><strong>不应该让真实 Provider API Key 出现在 GitHub 或客户端代码中。</strong></blockquote>
+<p>因此我没有直接把 Key 写进 <code>config.yaml</code>：</p>
+<pre><code>api_key: sk-xxxxx</code></pre>
+<p>而是使用：</p>
+<pre><code>api_key: os.environ/DEEPSEEK_API_KEY</code></pre>
+<p>服务器创建：</p>
+<pre><code>nano .env</code></pre>
+<p>配置：</p>
+<pre><code>OPENAI_API_KEY=&lt;YOUR_OPENAI_API_KEY&gt;
+DEEPSEEK_API_KEY=&lt;YOUR_DEEPSEEK_API_KEY&gt;
+DASHSCOPE_API_KEY=&lt;YOUR_DASHSCOPE_API_KEY&gt;
+
+LITELLM_MASTER_KEY=&lt;YOUR_LITELLM_MASTER_KEY&gt;</code></pre>
+<p>然后限制文件权限：</p>
+<pre><code>chmod 600 .env</code></pre>
+<p>这样形成两层 Key：</p>
+<pre><code>                LiteLLM Master Key
+客户端 ───────────────────────────→ LiteLLM
+                                      │
+                                      │ Provider API Key
+                                      ▼
+                                   DeepSeek</code></pre>
+<p>客户端只需要持有：</p>
+<pre><code>LITELLM_MASTER_KEY</code></pre>
+<p>真正的：</p>
+<pre><code>OPENAI_API_KEY
+DEEPSEEK_API_KEY
+DASHSCOPE_API_KEY</code></pre>
+<p>只存在于服务器环境中。</p>
+<p>这既降低了 Provider Key 暴露风险，也方便后续统一管理模型访问权限。</p>
+<p>---</p>
+<h2>六、Docker 部署方案的选择</h2>
+<p>在设计 Docker 部署方式时，我对比了两种方案。</p>
+<h3>方案 A：构建自己的 LiteLLM 镜像</h3>
+<pre><code>Official LiteLLM Image
+          +
+     config.yaml
+          ↓
+     docker build
+          ↓
+Custom LiteLLM Image</code></pre>
+<p>对应 Dockerfile：</p>
+<pre><code>FROM docker.litellm.ai/berriai/litellm-non_root:main-stable
+
+COPY config.yaml /app/config.yaml
+
+CMD [&quot;--config&quot;, &quot;/app/config.yaml&quot;, &quot;--port&quot;, &quot;4000&quot;, &quot;--host&quot;, &quot;0.0.0.0&quot;]</code></pre>
+<p>这种方式的优势是：</p>
+<blockquote><strong>镜像本身包含配置，更适合标准化交付。</strong></blockquote>
+<p>但是我考虑到这个 Gateway 后续还需要持续增加、删除和切换模型。</p>
+<p>如果把配置直接 COPY 到镜像，每次修改 <code>config.yaml</code> 都需要：</p>
+<pre><code>修改配置
+ ↓
+docker build
+ ↓
+生成新镜像
+ ↓
+重新创建容器</code></pre>
+<p>因此我最终没有采用这种方式。</p>
+<h3>方案 B：官方镜像 + Volume Mount</h3>
+<p>我最终选择：</p>
+<pre><code>Tencent Cloud
+│
+├── config.yaml ───────────┐
+│                         │ Volume Mount
+│                         ▼
+│                  LiteLLM Container
+│                         ▲
+└── .env ──────────────────┘</code></pre>
+<p>也就是：</p>
+<blockquote><strong>保持 LiteLLM 官方镜像不变，在运行容器时动态挂载自己的配置。</strong></blockquote>
+<p>这样以后修改模型配置时，不需要重新 Build 整个镜像。</p>
+<p>对于当前这种需要持续实验不同模型的 Gateway，我认为这种方式维护成本更低。</p>
+<h2>七、启动 LiteLLM Gateway</h2>
+<p>最终没有执行 <code>docker build</code>，而是直接使用官方镜像：</p>
+<pre><code>docker run -d \
+  --name litellm \
+  --restart unless-stopped \
+  --env-file .env \
+  -p 4000:4000 \
+  -v /root/litellm-yuli/config.yaml:/app/config.yaml:ro \
+  docker.litellm.ai/berriai/litellm-non_root:main-stable \
+  --config /app/config.yaml \
+  --host 0.0.0.0 \
+  --port 4000</code></pre>
+<p>其中：</p>
+<pre><code>--env-file .env</code></pre>
+<p>负责注入环境变量。</p>
+<pre><code>-p 4000:4000</code></pre>
+<p>建立：</p>
+<pre><code>Host :4000
+   ↓
+Container :4000</code></pre>
+<p>而：</p>
+<pre><code>-v /root/litellm-yuli/config.yaml:/app/config.yaml:ro</code></pre>
+<p>则建立：</p>
+<pre><code>Host config.yaml
+        ↓
+Volume Mount
+        ↓
+Container /app/config.yaml</code></pre>
+<p><code>:ro</code> 表示 Read Only，避免容器修改宿主机配置。</p>
+<p>同时：</p>
+<pre><code>--restart unless-stopped</code></pre>
+<p>保证服务器或 Docker 重启后，Gateway 可以自动恢复运行，除非主动停止容器。</p>
+<p>---</p>
+<h2>八、验证容器与 Gateway</h2>
+<p>部署完成之后，我没有立即测试模型，而是按照<strong>从底层到上层逐层验证</strong>的方式进行检查。</p>
+<p>首先检查容器：</p>
+<pre><code>docker ps --filter name=litellm</code></pre>
+<p>确认：</p>
+<pre><code>STATUS: Up
+PORTS: 0.0.0.0:4000-&gt;4000/tcp</code></pre>
+<p>然后查看服务日志：</p>
+<pre><code>docker logs --tail 50 litellm</code></pre>
+<p>确认：</p>
+<pre><code>Application startup complete.
+Uvicorn running on http://0.0.0.0:4000</code></pre>
+<p>最后进行 Health Check：</p>
+<pre><code>curl -s http://localhost:4000/health/liveliness</code></pre>
+<p>返回：</p>
+<pre><code>&quot;I&#x27;m alive!&quot;</code></pre>
+<p>到这里可以确认：</p>
+<pre><code>Docker
+  ↓
+Container
+  ↓
+Port Mapping
+  ↓
+LiteLLM Process
+  ↓
+HTTP Endpoint
+
+全部正常</code></pre>
+<p>然后才进入真正的模型调用测试。</p>
+<p>---</p>
+<h2>九、验证 DeepSeek 模型路由</h2>
+<p>加载当前 Shell 环境变量：</p>
+<pre><code>set -a
+source .env
+set +a</code></pre>
+<p>然后调用：</p>
+<pre><code>curl http://localhost:4000/v1/chat/completions \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Authorization: Bearer $LITELLM_MASTER_KEY&quot; \
+  -d &#x27;{
+    &quot;model&quot;: &quot;deepseek&quot;,
+    &quot;messages&quot;: [
+      {
+        &quot;role&quot;: &quot;user&quot;,
+        &quot;content&quot;: &quot;你好，请只回复：DeepSeek测试成功&quot;
+      }
+    ]
+  }&#x27;</code></pre>
+<p>成功返回：</p>
+<pre><code>DeepSeek测试成功</code></pre>
+<p>意味着：</p>
+<pre><code>HTTP Request
+   ↓
+LiteLLM Authentication
+   ↓
+Model Alias: deepseek
+   ↓
+Model Routing
+   ↓
+DEEPSEEK_API_KEY
+   ↓
+DeepSeek API
+   ↓
+Response</code></pre>
+<p>完整链路已经正常。</p>
+<h2>十、实现公网模型调用</h2>
+<p>服务器内部验证完成后，我继续验证真实客户端访问场景。</p>
+<p>在腾讯云防火墙开放 TCP <code>4000</code> 端口后，从 Mac 执行：</p>
+<pre><code>curl http://&lt;SERVER_PUBLIC_IP&gt;:4000/health/liveliness</code></pre>
+<p>成功得到：</p>
+<pre><code>&quot;I&#x27;m alive!&quot;</code></pre>
+<p>然后在 Mac 配置：</p>
+<pre><code>export LITELLM_MASTER_KEY=&#x27;&lt;YOUR_MASTER_KEY&gt;&#x27;</code></pre>
+<p>从公网请求 DeepSeek：</p>
+<pre><code>curl http://&lt;SERVER_PUBLIC_IP&gt;:4000/v1/chat/completions \
+  -H &quot;Content-Type: application/json&quot; \
+  -H &quot;Authorization: Bearer $LITELLM_MASTER_KEY&quot; \
+  -d &#x27;{
+    &quot;model&quot;: &quot;deepseek&quot;,
+    &quot;messages&quot;: [
+      {
+        &quot;role&quot;: &quot;user&quot;,
+        &quot;content&quot;: &quot;你好，请只回复：公网调用成功&quot;
+      }
+    ]
+  }&#x27;</code></pre>
+<p>最终返回：</p>
+<pre><code>公网调用成功</code></pre>
+<p>至此完成：</p>
+<pre><code>Mac Client
+     ↓
+Internet
+     ↓
+Tencent Cloud Firewall
+     ↓
+Host :4000
+     ↓
+Docker Port Mapping
+     ↓
+LiteLLM Gateway
+     ↓
+Authentication
+     ↓
+Model Routing
+     ↓
+DeepSeek
+     ↓
+Response</code></pre>
+<p>完整端到端验证通过。</p>
+<h2>十一、最终成果</h2>
+<p>最终我独立搭建了一套：</p>
+<pre><code>                    ┌── OpenAI
+                    │
+Client → LiteLLM ───┼── DeepSeek
+                    │
+                    └── Qwen</code></pre>
+<p>的统一模型 Gateway。</p>
+<p>实现了：</p>
+<p>* 多模型 Provider 的统一 API 入口；<br />* OpenAI-compatible Chat Completions API；<br />* 自定义模型 Alias 与模型路由；<br />* Provider API Key 与客户端隔离；<br />* LiteLLM Master Key 统一鉴权；<br />* Docker 容器化部署；<br />* Volume 动态挂载模型配置；<br />* Docker 自动重启策略；<br />* DeepSeek、Qwen 实际模型调用验证；<br />* 应用 → 腾讯云 → LiteLLM → LLM Provider 的公网端到端调用。</p></div></article>
+</main><aside class="post-toc" aria-label="文章目录"><p>本文目录</p><nav id="post-toc-list"></nav></aside><script src="../../post-toc.js"></script><script src="../../editor-access.js"></script></body></html>
